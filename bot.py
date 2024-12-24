@@ -1,6 +1,7 @@
 import os
 
 import requests
+from db_config import get_connection
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 import re
@@ -110,12 +111,47 @@ def search_vacancies(query, page=PAGE, per_page=10):
         return None
 
 def add_to_search_history(user_id, query):
-    if user_id not in search_history:
-        search_history[user_id] = deque(maxlen=5)  # Ограничиваем историю до 5 поисков
-    search_history[user_id].append(query)
+    """Сохраняем запрос в истории поиска"""
+    connection = get_connection()
+    if connection:
+        try:
+            cursor = connection.cursor()
+            # Вставляем новый поисковый запрос в таблицу
+            cursor.execute("""
+                INSERT INTO search_history (user_id, search_query)
+                VALUES (%s, %s);
+            """, (user_id, query))
+            connection.commit()
+            print("Search query added successfully!")
+        except Exception as e:
+            print(f"Error adding search query: {e}")
+        finally:
+            cursor.close()
+            connection.close()
 
-def get_last_searches(user_id):
-    return search_history.get(user_id, [])
+def get_last_searches(user_id, limit=5):
+    """Получаем последние уникальные поисковые запросы пользователя из базы данных"""
+    connection = get_connection()
+    if connection:
+        try:
+            cursor = connection.cursor()
+            # Получаем последние уникальные запросы пользователя
+            cursor.execute("""
+                SELECT DISTINCT search_query 
+                FROM search_history 
+                WHERE user_id = %s
+                ORDER BY search_date DESC 
+                LIMIT %s;
+            """, (user_id, limit))
+            result = cursor.fetchall()
+            # Преобразуем результат в список строк
+            return [row[0] for row in result]
+        except Exception as e:
+            print(f"Error fetching search history: {e}")
+            return []
+        finally:
+            cursor.close()
+            connection.close()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Приветственное сообщение"""

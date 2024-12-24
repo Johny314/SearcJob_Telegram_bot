@@ -6,10 +6,10 @@ def create_tables():
         try:
             cursor = connection.cursor()
             cursor.execute("""
-                CREATE TABLE search_history (
+                CREATE TABLE IF NOT EXISTS search_history (
                     id SERIAL PRIMARY KEY,
-                    user_id VARCHAR(255),
-                    search_query VARCHAR(255),
+                    user_id INTEGER NOT NULL,  -- Используем INTEGER для user_id
+                    search_query TEXT NOT NULL,  -- Используем TEXT для search_query
                     search_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
