@@ -8,8 +8,8 @@ def create_tables():
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS search_history (
                     id SERIAL PRIMARY KEY,
-                    user_id INTEGER NOT NULL,  -- Используем INTEGER для user_id
-                    search_query TEXT NOT NULL,  -- Используем TEXT для search_query
+                    user_id INTEGER NOT NULL,
+                    search_query TEXT NOT NULL,
                     search_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)

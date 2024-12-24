@@ -6,17 +6,18 @@ from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 import re
 import nltk
+import math
 from nltk.corpus import stopwords
 from collections import Counter
-from collections import deque
 from telegram.ext import CommandHandler, Application, ContextTypes, CallbackQueryHandler
 
 # Загружаем переменные окружения из файла .env
 load_dotenv()
 
 # Параметры поиска вакансий из .env
-PAGE = int(os.getenv("PAGE", 0))# Начальная страница
+PAGE = int(os.getenv("PAGE", 0))  # Начальная страница
 PER_PAGE = int(os.getenv("PER_PAGE", 10))  # Количество вакансий на странице
+TOTAL_PAGES = int(os.getenv("TOTAL_PAGES", 39))  # Количество страниц
 
 # Токен бота
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -137,10 +138,11 @@ def get_last_searches(user_id, limit=5):
             cursor = connection.cursor()
             # Получаем последние уникальные запросы пользователя
             cursor.execute("""
-                SELECT DISTINCT search_query 
-                FROM search_history 
+                SELECT search_query
+                FROM search_history
                 WHERE user_id = %s
-                ORDER BY search_date DESC 
+                GROUP BY search_query
+                ORDER BY MAX(search_date) DESC
                 LIMIT %s;
             """, (user_id, limit))
             result = cursor.fetchall()
@@ -162,18 +164,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Анализ компетенций в вакансиях"""
+    """Анализ компетенций в вакансиях с прогресс-баром, обновляемым на каждой странице"""
     if context.args:
         query = " ".join(context.args)
-        await update.message.reply_text(f"Ищу вакансии для анализа по запросу: {query}...")
+        # Отправляем начальное сообщение с прогресс-баром
+        progress_message = await update.message.reply_text(
+            f"Ищу вакансии для анализа по запросу: {query}...\nПрогресс: 0%",
+            parse_mode="Markdown"
+        )
 
         # Параметры для пагинации
-        page = PAGE
         per_page = PER_PAGE
+        total_pages = TOTAL_PAGES
         all_skills = Counter()
         analyzed_vacancies = 0  # Счетчик проанализированных вакансий
+        page = 1  # Начальная страница
+        last_progress = 0  # Переменная для хранения предыдущего прогресса
 
-        while True:
+        while page <= total_pages:
             # Поиск вакансий
             vacancies = search_vacancies(query, page, per_page)
             if vacancies and "items" in vacancies:
@@ -195,22 +203,31 @@ async def analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         skills_from_text = analyze_skills(text)
                         all_skills.update(dict(skills_from_text))
 
+                # Обновление прогресса после обработки страницы
+                progress_percentage = math.floor((page / total_pages) * 100)
+
+                # Только обновляем сообщение, если прогресс изменился
+                if progress_percentage != last_progress:
+                    await progress_message.edit_text(
+                        f"Ищу вакансии для анализа по запросу: {query}...\nПрогресс: {progress_percentage}%"
+                    )
+                    last_progress = progress_percentage  # Обновляем прогресс
+
                 page += 1  # Переходим к следующей странице
-                # Если на странице больше вакансий нет, выходим
-                if page * per_page >= 2000:
-                    break
             else:
                 break  # Если вакансий не найдено, выходим из цикла
 
         # Форматирование результата
         if all_skills:
             skills_message = "\n".join([f"{skill}: {count}" for skill, count in all_skills.most_common(10)])
-            await update.message.reply_text(
+            await progress_message.edit_text(
                 f"Наиболее востребованные навыки:\n{skills_message}\n\n"
                 f"Проанализировано {analyzed_vacancies} вакансий."
             )
         else:
-            await update.message.reply_text(f"Не удалось извлечь навыки из вакансий.\nПроанализировано {analyzed_vacancies} вакансий.")
+            await progress_message.edit_text(
+                f"Не удалось извлечь навыки из вакансий.\nПроанализировано {analyzed_vacancies} вакансий."
+            )
     else:
         await update.message.reply_text("Введите запрос для анализа, например: /analyze Python разработчик")
 
