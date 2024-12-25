@@ -54,3 +54,10 @@ async def handle_new_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text="Введите текст вашего запроса:"
     )
     return state
+
+async def handle_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Обработчик кнопки "⬅️ Назад", возвращает пользователя в главное меню.
+    """
+    await display_main_menu(update, context)
+    return ConversationHandler.END

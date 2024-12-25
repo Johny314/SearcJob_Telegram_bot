@@ -1,3 +1,5 @@
+from typing import List
+
 import aiohttp
 import os
 from dotenv import load_dotenv
@@ -35,6 +37,39 @@ async def fetch_vacancies(query: str, page: int = 0, per_page: int = 10) -> dict
         except Exception as e:
             print(f"Unexpected Error: {e}")
             return {}
+
+
+async def fetch_all_vacancies(query: str, total_vacancies: int = 2000) -> List[dict]:
+    """
+    Загружает все вакансии по заданному запросу, используя пагинацию.
+    :param query: Текстовый запрос для поиска вакансий.
+    :param total_vacancies: Общее количество вакансий, которое нужно загрузить.
+    :return: Список всех вакансий.
+    """
+    all_vacancies = []
+    page = 0
+    per_page = 100  # Максимально допустимое значение per_page для HH API
+
+    while len(all_vacancies) < total_vacancies:
+        data = await fetch_vacancies(query, page, per_page)
+
+        if not data or "items" not in data:
+            break
+
+        vacancies = data.get("items", [])
+        all_vacancies.extend(vacancies)
+
+        # Обновляем прогресс для пользователя
+        progress = len(all_vacancies) / total_vacancies * 100
+        print(f"Загрузка вакансий: {progress:.2f}% завершено.")
+
+        # Если вакансий на странице меньше, чем per_page, значит, данных больше нет
+        if len(vacancies) < per_page:
+            break
+
+        page += 1
+
+    return all_vacancies[:total_vacancies]
 
 
 async def fetch_vacancy_details(vacancy_id: str) -> dict:

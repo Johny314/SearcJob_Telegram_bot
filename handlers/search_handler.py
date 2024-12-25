@@ -38,17 +38,38 @@ async def prompt_search_query(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def execute_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Выполняет поиск вакансий по запросу.
-    """
-    user_id = update.message.from_user.id
-    query = update.message.text
+    if context.user_data.get("is_processing", False):
+        chat_id = update.message.chat_id if update.message else update.callback_query.message.chat_id
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Ваш запрос уже обрабатывается. Подождите завершения текущего действия."
+        )
+        return SEARCH_WAITING_FOR_QUERY
 
-    # Сохраняем запрос в историю
-    await add_to_search_history(user_id=user_id, search_query=query)
+    context.user_data["is_processing"] = True  # Устанавливаем флаг выполнения
 
-    # Запрашиваем вакансии через сервис
     try:
+        if update.message and update.message.text:
+            query = update.message.text.strip()
+            chat_id = update.message.chat_id
+        elif update.callback_query and update.callback_query.data:
+            query = update.callback_query.data.removeprefix("search_query_").strip()
+            chat_id = update.callback_query.message.chat_id
+        else:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="Не могу обработать запрос. Пожалуйста, попробуйте снова."
+            )
+            return SEARCH_WAITING_FOR_QUERY
+
+        if not query:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="Пожалуйста, введите текст для поиска."
+            )
+            return SEARCH_WAITING_FOR_QUERY
+
+        # Имитация выполнения операции поиска
         data = await fetch_vacancies(query=query, page=0, per_page=5)
 
         if data and data.get("items"):
@@ -58,33 +79,16 @@ async def execute_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         else:
             results = "По вашему запросу вакансий не найдено."
+
+        # Возвращаем результаты с кнопкой "Назад"
+        await send_menu(update, results, reply_markup=generate_back_button())
+
     except Exception as e:
-        results = f"Произошла ошибка: {e}"
+        await context.bot.send_message(chat_id=chat_id, text=f"Произошла ошибка: {e}")
 
-    # Отправляем результаты
-    await context.bot.send_message(chat_id=update.message.chat_id, text=results)
+    finally:
+        context.user_data["is_processing"] = False
+
+    return SEARCH_WAITING_FOR_QUERY  # Возвращаем состояние ожидания следующего запроса
 
 
-async def search_query_from_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Обрабатывает выбор запроса из истории.
-    Выполняет поиск по выбранному запросу.
-    """
-    query = update.callback_query.data.removeprefix("search_query_")
-
-    # Выполняем поиск так же, как в execute_search()
-    try:
-        data = await fetch_vacancies(query=query, page=0, per_page=5)
-
-        if data and data.get("items"):
-            results = "\n\n".join(
-                f"{item['name']} — {item['employer']['name']}\n{item['alternate_url']}"
-                for item in data["items"]
-            )
-        else:
-            results = "По вашему запросу вакансий не найдено."
-    except Exception as e:
-        results = f"Произошла ошибка: {e}"
-
-    # Отправляем результаты
-    await send_menu(update, results, reply_markup=generate_back_button())

@@ -12,14 +12,11 @@ from handlers import (
     start,
     prompt_search_query,
     execute_search,
-    search_query_from_history,
     execute_analyze,
     prompt_analyze_query,
-    analyze_query_from_history,
-    display_main_menu,
     about_action,
 )
-from handlers.common import handle_new_query
+from handlers.common import handle_new_query, handle_back
 from constants import SEARCH_WAITING_FOR_QUERY, ANALYZE_WAITING_FOR_QUERY
 
 # Загрузка переменных окружения
@@ -42,15 +39,15 @@ def main():
     # ConversationHandler для поиска
     application.add_handler(
         ConversationHandler(
-            entry_points=[CallbackQueryHandler(prompt_search_query, pattern="^search$")],
+            entry_points=[CallbackQueryHandler(prompt_search_query, pattern="^action_search$")],
             states={
                 SEARCH_WAITING_FOR_QUERY: [
-                    CallbackQueryHandler(search_query_from_history, pattern="^search_query_"),
+                    CallbackQueryHandler(execute_search, pattern="^search_query_"),
                     CallbackQueryHandler(handle_new_query, pattern="^search_new_query$"),
                     MessageHandler(filters.TEXT & ~filters.COMMAND, execute_search),
                 ],
             },
-            fallbacks=[CallbackQueryHandler(display_main_menu, pattern="^action_back$")],
+            fallbacks=[CallbackQueryHandler(handle_back, pattern="^action_back$")],  # Используем handle_back
         )
     )
 
@@ -60,12 +57,12 @@ def main():
             entry_points=[CallbackQueryHandler(prompt_analyze_query, pattern="^action_analyze$")],
             states={
                 ANALYZE_WAITING_FOR_QUERY: [
-                    CallbackQueryHandler(analyze_query_from_history, pattern="^analyze_query_"),
+                    CallbackQueryHandler(execute_analyze, pattern="^analyze_query_"),
                     CallbackQueryHandler(handle_new_query, pattern="^analyze_new_query$"),
                     MessageHandler(filters.TEXT & ~filters.COMMAND, execute_analyze),
                 ],
             },
-            fallbacks=[CallbackQueryHandler(display_main_menu, pattern="^action_back$")],
+            fallbacks=[CallbackQueryHandler(handle_back, pattern="^action_back$")],  # Используем handle_back
         )
     )
 

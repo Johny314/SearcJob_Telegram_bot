@@ -54,6 +54,7 @@ def extract_skills(vacancy: dict) -> list:
 
     return skills
 
+
 def process_vacancies(data: dict):
     """
        Обрабатывает данные о вакансиях, извлекает навыки и подсчитывает их популярность.
@@ -83,16 +84,15 @@ def process_vacancies(data: dict):
 
 def format_skills_output(top_skills, total_vacancies):
     """
-       Форматирует результат анализа навыков для удобного вывода.
-       :param top_skills: Список топ-навыков и их частот (например, [("Python", 20), ("SQL", 15)]).
-       :param total_vacancies: Общее число анализируемых вакансий.
-       :return: Строка с результатами.
-       """
-    output = [f"Количество проанализированных вакансий: {total_vacancies}\n", "ТОП навыков из вакансий:\n"]
+    Форматирует результат анализа навыков для удобного вывода.
+    :param top_skills: Список топ-навыков и их частот (например, [("Python", 20), ("SQL", 15)]).
+    :param total_vacancies: Общее число анализируемых вакансий.
+    :return: Строка с результатами.
+    """
+    output = [f"Количество проанализированных вакансий: {total_vacancies}\n", "ТОП-10 навыков из вакансий:\n"]
 
-    for i, (skill, count) in enumerate(top_skills, 1):
+    for i, (skill, count) in enumerate(top_skills[:10], 1):  # Ограничение до 10 навыков
         output.append(f"{i}. {skill.capitalize()} — {count} упоминаний")
 
     return "\n".join(output)
-
 
