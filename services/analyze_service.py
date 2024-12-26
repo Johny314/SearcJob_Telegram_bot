@@ -1,5 +1,8 @@
-import re
+import spacy
 from collections import Counter
+
+# Загружаем English NLP модель spaCy
+nlp = spacy.load("en_core_web_sm")
 
 # Список заранее определенных навыков (можно будет вынести его в файл конфигурации)
 SKILLS_LIST = [
@@ -9,11 +12,11 @@ SKILLS_LIST = [
     'objective-c', 'matlab', 'shell', 'powershell', 'visual basic',
     'assembly', 'lua',
 
-    # Веб-разработка: фронтенд
+    # Веб-разработка: frontend
     'html', 'css', 'bootstrap', 'sass', 'less', 'javascript', 'jquery',
     'react', 'vue.js', 'angular', 'svelte', 'next.js', 'nuxt.js', 'elm',
 
-    # Веб-разработка: бэкенд
+    # Веб-разработка: backend
     'node.js', 'express.js', 'nest.js', 'django', 'flask', 'fastapi',
     'spring', 'spring boot', 'asp.net', 'laravel', 'symfony',
     'rails', 'ruby on rails', 'cakephp', 'gin',
@@ -67,87 +70,75 @@ SKILLS_LIST = [
 ]
 
 
-def clean_text(text: str) -> str:
-    """Очищает текст от спецсимволов и переводит в нижний регистр."""
-    if not text:  # Если текст пустой - защищаемся.
-        return ""
-    return re.sub(r'[^\w\s]', ' ', text).lower()
-
-
-def analyze_skills(text: str) -> Counter:
+def extract_skills_with_spacy(text: str) -> list:
     """
-    Анализирует список ключевых навыков на основе текста.
-    Возвращает Counter с частотой упоминания каждого навыка.
+    Использует spaCy для извлечения навыков из текста.
+    :param text: Текст, из которого извлекаются навыки.
+    :return: Список найденных навыков.
     """
-    # Очистка текста и выделение слов
-    words = clean_text(text).split()
+    doc = nlp(text.lower())
 
-    # Подсчет навыков, которые есть в SKILLS_LIST
-    return Counter(word for word in words if word in SKILLS_LIST)
+    # Ищем только совпадения из SKILLS_LIST
+    found_skills = []
+    for token in doc:
+        if token.text in SKILLS_LIST:
+            found_skills.append(token.text)
 
+    # Проверяем на составные фразы (биграммы, триграммы)
+    for chunk in doc.noun_chunks:
+        chunk_text = chunk.text.lower().strip()
+        if chunk_text in SKILLS_LIST:
+            found_skills.append(chunk_text)
 
-def extract_skills(vacancy: dict) -> list:
-    """
-    Извлечение навыков из данных вакансии.
-    :param vacancy: Данные одной вакансии (словарь)
-    :return: Список навыков
-    """
-    skills = []
-
-    # Извлекаем поле snippet и его содержимое
-    snippet = vacancy.get('snippet', {})
-    if not snippet:
-        return skills
-
-    # Извлекаем "requirement" и "responsibility", если они есть
-    requirement = snippet.get('requirement', '')
-    responsibility = snippet.get('responsibility', '')
-
-    for word in SKILLS_LIST:
-        if word.lower() in requirement.lower() or word.lower() in responsibility.lower():
-            skills.append(word)
-
-    return skills
+    # Убираем повторяющиеся элементы
+    return list(set(found_skills))
 
 
 def process_vacancies(data: dict):
     """
-       Обрабатывает данные о вакансиях, извлекает навыки и подсчитывает их популярность.
-       :param data: Ответ API с данными о вакансиях.
-       :return: Список топ-способностей (name, count) и общее количество проанализированных вакансий.
-       """
+    Анализирует вакансии на основе NLP методов.
+    :param data: JSON-объект со списком вакансий.
+    :return: ТОП-10 навыков и общее число обработанных вакансий.
+    """
     all_skills = []
     analyzed_vacancies_count = 0
 
-    if not data or "items" not in data:
+    if "items" not in data:
         return [], 0
 
     for item in data["items"]:
         try:
-            skills = extract_skills(item)
+            snippet = item.get('snippet', {})
+            requirement = snippet.get('requirement', '')
+            responsibility = snippet.get('responsibility', '')
+
+            # Консолидируем текст
+            text = f"{requirement} {responsibility}"
+
+            # Извлечение навыков через spaCy
+            skills = extract_skills_with_spacy(text)
             if skills:
                 all_skills.extend(skills)
+
             analyzed_vacancies_count += 1
         except Exception as e:
             print(f"Ошибка при обработке одной из вакансий: {e}")
 
+    # Подсчёт частоты навыков
     skills_counter = Counter(all_skills)
-    top_skills = skills_counter.most_common()
-
-    return top_skills, analyzed_vacancies_count
+    return skills_counter.most_common(), analyzed_vacancies_count
 
 
 def format_skills_output(top_skills, total_vacancies):
     """
-    Форматирует результат анализа навыков для удобного вывода.
-    :param top_skills: Список топ-навыков и их частот (например, [("Python", 20), ("SQL", 15)]).
-    :param total_vacancies: Общее число анализируемых вакансий.
-    :return: Строка с результатами.
+    Формирует результаты анализа навыков для удобного вывода.
+    :param top_skills: Список (навык, частота).
+    :param total_vacancies: Количество вакансий.
     """
     output = [f"Количество проанализированных вакансий: {total_vacancies}\n", "ТОП-10 навыков из вакансий:\n"]
 
-    for i, (skill, count) in enumerate(top_skills[:10], 1):  # Ограничение до 10 навыков
-        output.append(f"{i}. {skill.capitalize()} — {count} упоминаний")
+    for idx, (skill, count) in enumerate(top_skills[:10], start=1):
+        output.append(f"{idx}. {skill.capitalize()} — {count} упоминаний")
 
     return "\n".join(output)
 

@@ -5,7 +5,13 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from handlers.common import send_menu, generate_back_button
-from services import get_last_searches, process_vacancies, fetch_vacancies, add_to_search_history
+from services import (
+    process_vacancies,
+    add_to_search_history,
+    fetch_vacancies
+)
+
+from services.database_service import get_last_searches
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -77,7 +83,7 @@ async def execute_analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Сообщение о начале прогресса
         progress_message = await context.bot.send_message(
             chat_id=chat_id,
-            text="Прогресс загрузки: 0%"
+            text="🔄 Прогресс загрузки: 0%"
         )
 
         # Загрузка данных (vacancies)
@@ -93,7 +99,7 @@ async def execute_analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             all_vacancies.extend(data["items"])
             progress_percent = min(int(len(all_vacancies) / total_vacancies_to_fetch * 100), 100)
-            await progress_message.edit_text(text=f"Прогресс загрузки: {progress_percent}%")
+            await progress_message.edit_text(text=f"🔄 Прогресс загрузки: {progress_percent}%")
 
             if len(data["items"]) < per_page:
                 break
@@ -103,7 +109,10 @@ async def execute_analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not all_vacancies:
             raise Exception("Не удалось загрузить вакансии.")
 
-        # Анализируем вакансии
+        # Обновляем сообщение о прогрессе
+        await progress_message.edit_text(text="🔄 Данные загружены. Начинаем анализ...")
+
+        # Анализ вакансий
         top_skills, total_vacancies = process_vacancies({"items": all_vacancies})
 
         if total_vacancies > 0 and top_skills:
@@ -122,7 +131,6 @@ async def execute_analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.delete_message(chat_id=chat_id, message_id=progress_message.message_id)
         except Exception as e:
-            # Игнорируем ошибки удаления, если сообщение уже удалено или недоступно
             print(f"Ошибка при удалении сообщения о прогрессе: {e}")
 
         # После успешного анализа
@@ -130,8 +138,8 @@ async def execute_analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=chat_id,
             text=results,
             reply_markup=generate_back_button(),
-            parse_mode="HTML",  # Указываем HTML форматирование
-            disable_web_page_preview=True  # Отключаем превью ссылок
+            parse_mode="HTML",
+            disable_web_page_preview=True
         )
 
     except Exception as e:
@@ -141,10 +149,3 @@ async def execute_analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["is_processing"] = False
 
     return ANALYZE_WAITING_FOR_QUERY
-
-
-
-
-
-
-
