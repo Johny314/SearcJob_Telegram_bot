@@ -1,3 +1,6 @@
+import os
+
+from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
@@ -5,9 +8,10 @@ from handlers.common import send_menu, generate_back_button
 from services.database_service import get_last_searches, add_to_search_history
 from services.search_service import fetch_vacancies
 
-# Константы для идентификации шагов
-SEARCH_WAITING_FOR_QUERY = 0
+# Загрузка переменных окружения
+load_dotenv()
 
+SEARCH_WAITING_FOR_QUERY = int(os.getenv("SEARCH_WAITING_FOR_QUERY"))
 
 async def prompt_search_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -65,23 +69,63 @@ async def execute_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not query:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text="Пожалуйста, введите текст для поиска."
+                text="Пожалуйста, введите текст для анализа."
             )
             return SEARCH_WAITING_FOR_QUERY
 
-        # Имитация выполнения операции поиска
+        # Сохранение запроса в историю пользователя
+        user_id = update.effective_user.id
+        await add_to_search_history(user_id, query)
+
+        # Запрашиваем вакансии
         data = await fetch_vacancies(query=query, page=0, per_page=5)
 
         if data and data.get("items"):
-            results = "\n\n".join(
-                f"{item['name']} — {item['employer']['name']}\n{item['alternate_url']}"
-                for item in data["items"]
-            )
-        else:
-            results = "По вашему запросу вакансий не найдено."
+            # Формируем красивый вывод вакансий
+            results = []
+            for item in data["items"]:
+                name = item.get("name", "Не указано")  # Название вакансии
+                employer = item.get("employer", {}).get("name", "Не указан")  # Работодатель
+                city = item.get("area", {}).get("name", "Не указан")  # Город
+                salary = item.get("salary")  # Зарплата
+                url = item.get("alternate_url", "#")  # Ссылка на вакансию
 
-        # Возвращаем результаты с кнопкой "Назад"
-        await send_menu(update, results, reply_markup=generate_back_button())
+                # Форматируем зарплату
+                if salary:
+                    if salary.get("from") and salary.get("to"):
+                        salary = f"{salary['from']} - {salary['to']} {salary['currency']}"
+                    elif salary.get("from"):
+                        salary = f"от {salary['from']} {salary['currency']}"
+                    elif salary.get("to"):
+                        salary = f"до {salary['to']} {salary['currency']}"
+                    else:
+                        salary = "Не указана"
+                else:
+                    salary = "Не указана"
+
+                # Формируем блок одной вакансии
+                vacancy_text = (
+                    f"📝 <b>{name}</b>\n"
+                    f"🏢 Работодатель: {employer}\n"
+                    f"📍 Город: {city}\n"
+                    f"💰 Зарплата: {salary}\n"
+                    f"🔗 <a href='{url}'>Подробнее о вакансии</a>"
+                )
+                results.append(vacancy_text)
+
+            # Объединяем вакансии в единый текст
+            results_text = "\n\n".join(results)
+        else:
+            results_text = "По вашему запросу вакансий не найдено."
+
+        # Отправляем результат
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=results_text,
+            reply_markup=generate_back_button(),
+            parse_mode="HTML",  # Указываем HTML для форматирования
+            disable_web_page_preview=True  # Отключаем превью ссылок
+        )
 
     except Exception as e:
         await context.bot.send_message(chat_id=chat_id, text=f"Произошла ошибка: {e}")
@@ -89,6 +133,7 @@ async def execute_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         context.user_data["is_processing"] = False
 
-    return SEARCH_WAITING_FOR_QUERY  # Возвращаем состояние ожидания следующего запроса
+    return SEARCH_WAITING_FOR_QUERY
+
 
 

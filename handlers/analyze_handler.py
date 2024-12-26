@@ -1,10 +1,16 @@
+import os
+
+from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler
+from telegram.ext import ContextTypes
 
-from constants import ANALYZE_WAITING_FOR_QUERY
 from handlers.common import send_menu, generate_back_button
-from services import get_last_searches, format_skills_output, process_vacancies, fetch_vacancies
+from services import get_last_searches, process_vacancies, fetch_vacancies, add_to_search_history
 
+# Загрузка переменных окружения
+load_dotenv()
+
+ANALYZE_WAITING_FOR_QUERY = int(os.getenv("ANALYZE_WAITING_FOR_QUERY"))
 
 async def prompt_analyze_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -43,7 +49,6 @@ async def execute_analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["is_processing"] = True
 
-
     try:
         if update.message and update.message.text:
             query = update.message.text.strip()
@@ -60,15 +65,19 @@ async def execute_analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if not query:
             await context.bot.send_message(
-                chat_id=update.message.chat_id if update.message else update.callback_query.message.chat_id,
+                chat_id=chat_id,
                 text="Пожалуйста, введите текст для анализа."
             )
             return ANALYZE_WAITING_FOR_QUERY
 
+        # Сохранение запроса в историю пользователя
+        user_id = update.effective_user.id
+        await add_to_search_history(user_id, query)
+
         # Сообщение о начале прогресса
         progress_message = await context.bot.send_message(
-            chat_id=update.message.chat_id if update.message else update.callback_query.message.chat_id,
-            text="Начинаем загрузку данных... Прогресс: 0%"
+            chat_id=chat_id,
+            text="Прогресс загрузки: 0%"
         )
 
         # Загрузка данных (vacancies)
@@ -98,12 +107,32 @@ async def execute_analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
         top_skills, total_vacancies = process_vacancies({"items": all_vacancies})
 
         if total_vacancies > 0 and top_skills:
-            results = format_skills_output(top_skills[:10], total_vacancies)  # Выводим ТОП-10 навыков
+            # Форматируем результаты анализа
+            results = (
+                f"📊 <b>Результаты анализа</b>\n"
+                f"✅ <b>Проанализировано вакансий:</b> {total_vacancies}\n\n"
+                f"<b>ТОП-10 навыков:</b>\n"
+            )
+            for i, (skill, count) in enumerate(top_skills[:10], 1):
+                results += f"  {i}. {skill.capitalize()} — {count} упоминаний\n"
         else:
-            results = "Не удалось извлечь навыки из предоставленных вакансий."
+            results = "Не удалось извлечь ключевые навыки из предоставленных вакансий."
+
+        # Удаляем сообщение с прогрессом загрузки
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=progress_message.message_id)
+        except Exception as e:
+            # Игнорируем ошибки удаления, если сообщение уже удалено или недоступно
+            print(f"Ошибка при удалении сообщения о прогрессе: {e}")
 
         # После успешного анализа
-        await send_menu(update, f"Анализ завершён! Вот результаты:\n{results}", reply_markup=generate_back_button())
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=results,
+            reply_markup=generate_back_button(),
+            parse_mode="HTML",  # Указываем HTML форматирование
+            disable_web_page_preview=True  # Отключаем превью ссылок
+        )
 
     except Exception as e:
         await context.bot.send_message(chat_id=chat_id, text=f"Произошла ошибка: {e}")
@@ -112,6 +141,8 @@ async def execute_analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["is_processing"] = False
 
     return ANALYZE_WAITING_FOR_QUERY
+
+
 
 
 

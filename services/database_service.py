@@ -64,6 +64,7 @@ async def get_last_searches(user_id, limit=5):
     finally:
         await connection.close()
 
+
 async def add_to_search_history(user_id, search_query):
     """
     Добавляет новый запрос в историю запросов пользователя.

@@ -17,12 +17,13 @@ from handlers import (
     about_action,
 )
 from handlers.common import handle_new_query, handle_back
-from constants import SEARCH_WAITING_FOR_QUERY, ANALYZE_WAITING_FOR_QUERY
 
 # Загрузка переменных окружения
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+ANALYZE_WAITING_FOR_QUERY = int(os.getenv("ANALYZE_WAITING_FOR_QUERY"))
+SEARCH_WAITING_FOR_QUERY = int(os.getenv("SEARCH_WAITING_FOR_QUERY"))
 
 if not BOT_TOKEN:
     raise ValueError("Токен бота отсутствует. Проверьте файл .env.")

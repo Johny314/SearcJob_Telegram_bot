@@ -1,8 +1,14 @@
+import os
+
+from dotenv import load_dotenv
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.ext import ContextTypes, ConversationHandler
 
-from constants import SEARCH_WAITING_FOR_QUERY, ANALYZE_WAITING_FOR_QUERY
+# Загрузка переменных окружения
+load_dotenv()
 
+ANALYZE_WAITING_FOR_QUERY = int(os.getenv("ANALYZE_WAITING_FOR_QUERY"))
+SEARCH_WAITING_FOR_QUERY = int(os.getenv("SEARCH_WAITING_FOR_QUERY"))
 
 def generate_main_menu():
     """Генерация главного меню."""

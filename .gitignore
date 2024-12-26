@@ -1,0 +1,16 @@
+# Исключаем папку настроек PyCharm
+.idea/
+
+# Исключаем файлы виртуального окружения
+*.pyc
+__pycache__/
+.vscode/
+.env/
+*.env
+venv/
+ENV/
+.venv/
+
+# Исключаем файлы, созданные OS
+.DS_Store
+Thumbs.db
