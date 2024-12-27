@@ -70,6 +70,9 @@ def main():
     # CallbackHandler для раздела "О боте"
     application.add_handler(CallbackQueryHandler(about_action, pattern="^action_about$"))
 
+    # CallbackHandler для кнопки "Назад"
+    application.add_handler(CallbackQueryHandler(handle_back, pattern="^action_back$"))
+
     # Лог успешного запуска
     print("Бот запущен. Ожидаем взаимодействия с пользователями...")
 

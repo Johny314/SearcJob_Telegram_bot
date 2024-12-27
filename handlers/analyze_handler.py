@@ -92,6 +92,8 @@ async def execute_analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
         per_page = 100
         page = 0
 
+        current_progress_text = progress_message.text
+
         while len(all_vacancies) < total_vacancies_to_fetch:
             data = await fetch_vacancies(query=query, page=page, per_page=per_page)
             if not data or "items" not in data:
@@ -99,7 +101,17 @@ async def execute_analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             all_vacancies.extend(data["items"])
             progress_percent = min(int(len(all_vacancies) / total_vacancies_to_fetch * 100), 100)
-            await progress_message.edit_text(text=f"🔄 Прогресс загрузки: {progress_percent}%")
+
+            new_progress_text = f"🔄 Прогресс загрузки: {progress_percent}%"
+            if current_progress_text != new_progress_text:
+                try:
+                    await progress_message.edit_text(text=new_progress_text)
+                    current_progress_text = new_progress_text
+                except Exception as e:
+                    if "Message is not modified" in str(e):
+                        pass
+                    else:
+                        raise
 
             if len(data["items"]) < per_page:
                 break
